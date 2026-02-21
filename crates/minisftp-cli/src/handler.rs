@@ -7,10 +7,9 @@
 use std::io::{self, Write};
 
 use minisftp_core::config::{AuthMethod, ConnectConfig};
-use minisftp_core::sftp::TransferResult;
+use minisftp_core::sftp::{CancellationToken, ProgressInfo, TransferResult};
 use minisftp_core::state::{ConnectionObserver, ConnectionState};
 use minisftp_core::session::SftpSession;
-use minisftp_core::sftp::ProgressInfo;
 use minisftp_core::utils::{fmt_size, local_ls, print_progress, resolve_path, resolve_local_path};
 
 use crate::commands::Command;
@@ -36,9 +35,11 @@ pub async fn run(
     let mut session = SftpSession::new(Box::new(CliObserver));
     let mut sftp    = session.connect(&config).await?;
 
-    println!("Connected. Type 'help' for commands.");
+    // 방식 A: 접속 직후 서버에 실제 홈 디렉토리 확인
+    let mut remote_dir = sftp.realpath(".").await
+        .unwrap_or_else(|_| ".".to_string());
 
-    let mut remote_dir = String::from(".");
+    println!("Connected. Remote: {}  Type 'help' for commands.", remote_dir);
     let mut local_dir  = std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| ".".to_string());
@@ -75,29 +76,53 @@ pub async fn run(
                 remote_dir = resolve_path(&remote_dir, &path);
                 println!("Remote: {}", remote_dir);
             }
-            Command::Pwd => println!("Remote: {}", remote_dir),
+            Command::Pwd => {
+                // 방식 B: 서버에 직접 확인 (심볼릭 링크 해소 등)
+                match sftp.pwd(&remote_dir).await {
+                    Ok(path) => println!("Remote: {}", path),
+                    Err(e)   => println!("Error: {}", e),
+                }
+            }
             Command::Get { remote, local } => {
                 let remote_path = resolve_path(&remote_dir, &remote);
                 let local_path  = resolve_local_path(&local_dir, &local);
-                match sftp.get(&remote_path, &local_path, |p: ProgressInfo| {
-                    print_progress(p.transferred, p.total, p.elapsed_secs);
-                }).await {
+                let token       = CancellationToken::new();
+                // ^C 태스크: 신호 수신 시 token.cancel()만 호출
+                // get()은 다음 청크에서 Cancelled(n)을 반환하고 정상 종료
+                let token_clone = token.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::signal::ctrl_c().await;
+                    token_clone.cancel();
+                });
+                match sftp.get(&remote_path, &local_path,
+                    |p: ProgressInfo| print_progress(p.transferred, p.total, p.elapsed_secs),
+                    token,
+                ).await {
                     Ok(TransferResult::Skipped)      => println!("Skipped (identical): {}", remote_path),
                     Ok(TransferResult::Resumed(n))   => { println!(); println!("Resumed: {} → {} ({} total)", remote_path, local_path, fmt_size(n)); }
                     Ok(TransferResult::Completed(n)) => { println!(); println!("Downloaded: {} → {} ({})", remote_path, local_path, fmt_size(n)); }
-                    Err(e) => println!("Error: {}", e),
+                    Ok(TransferResult::Cancelled(n)) => { println!(); println!("Cancelled. ({} transferred)", fmt_size(n)); }
+                    Err(e) => { println!(); println!("Error: {}", e); }
                 }
             }
             Command::Put { local, remote } => {
                 let local_path  = resolve_local_path(&local_dir, &local);
                 let remote_path = resolve_path(&remote_dir, &remote);
-                match sftp.put(&local_path, &remote_path, |p: ProgressInfo| {
-                    print_progress(p.transferred, p.total, p.elapsed_secs);
-                }).await {
+                let token       = CancellationToken::new();
+                let token_clone = token.clone();
+                tokio::spawn(async move {
+                    let _ = tokio::signal::ctrl_c().await;
+                    token_clone.cancel();
+                });
+                match sftp.put(&local_path, &remote_path,
+                    |p: ProgressInfo| print_progress(p.transferred, p.total, p.elapsed_secs),
+                    token,
+                ).await {
                     Ok(TransferResult::Skipped)      => println!("Skipped (identical): {}", local_path),
                     Ok(TransferResult::Resumed(n))   => { println!(); println!("Resumed: {} → {} ({} total)", local_path, remote_path, fmt_size(n)); }
                     Ok(TransferResult::Completed(n)) => { println!(); println!("Uploaded: {} → {} ({})", local_path, remote_path, fmt_size(n)); }
-                    Err(e) => println!("Error: {}", e),
+                    Ok(TransferResult::Cancelled(n)) => { println!(); println!("Cancelled. ({} transferred)", fmt_size(n)); }
+                    Err(e) => { println!(); println!("Error: {}", e); }
                 }
             }
             Command::Mkdir { path } => {

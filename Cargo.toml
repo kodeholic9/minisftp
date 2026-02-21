@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version     = "0.1.0"
+version     = "0.1.1"
 edition     = "2021"
 authors     = ["kodeholic9"]
 license     = "MIT OR Apache-2.0"
@@ -16,6 +16,7 @@ readme      = "README.md"
 
 [workspace.dependencies]
 tokio      = { version = "1",    features = ["full"] }
+tokio-util = { version = "0.7",  features = ["rt"] }
 russh      = "0.45.0"
 russh-sftp = "2.0"
 chrono     = { version = "0.4",  features = ["std"] }

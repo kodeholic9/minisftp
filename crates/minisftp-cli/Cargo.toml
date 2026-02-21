@@ -17,8 +17,10 @@ name = "minisftp"
 path = "src/main.rs"
 
 [dependencies]
-minisftp-core        = { version = "0.1.0" }
+minisftp-core        = { path = "../minisftp-core" }
 tokio                = { workspace = true }
+tokio-util           = { workspace = true }
 chrono               = { workspace = true }
+ctrlc                = { version = "3", features = ["termination"] }
 tracing              = "0.1"
 tracing-subscriber   = { version = "0.3", features = ["env-filter"] }
