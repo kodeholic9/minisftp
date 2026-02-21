@@ -1,0 +1,24 @@
+[package]
+name        = "minisftp-cli"
+description = "Minimal SFTP interactive CLI client"
+version.workspace     = true
+edition.workspace     = true
+authors.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+homepage.workspace    = true
+readme.workspace      = true
+
+keywords    = ["sftp", "ssh", "cli", "file-transfer"]
+categories  = ["command-line-utilities", "network-programming"]
+
+[[bin]]
+name = "minisftp"
+path = "src/main.rs"
+
+[dependencies]
+minisftp-core        = { path = "../minisftp-core" }
+tokio                = { workspace = true }
+chrono               = { workspace = true }
+tracing              = "0.1"
+tracing-subscriber   = { version = "0.3", features = ["env-filter"] }

@@ -1,0 +1,21 @@
+[package]
+name        = "minisftp-core"
+description = "Minimal SFTP client core library built on russh"
+version.workspace     = true
+edition.workspace     = true
+authors.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+homepage.workspace    = true
+readme.workspace      = true
+
+keywords    = ["sftp", "ssh", "ftp", "file-transfer", "async"]
+categories  = ["network-programming", "filesystem", "asynchronous"]
+
+[dependencies]
+tokio      = { workspace = true }
+russh      = { workspace = true }
+russh-sftp = { workspace = true }
+chrono     = { workspace = true }
+tracing    = "0.1"
+async-trait = "0.1"
